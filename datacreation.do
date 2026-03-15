@@ -1,5 +1,5 @@
 **********************************************
-*Merging individual income, hhincome and POI files (wave 11 - wave 18)
+*Merging individual income, hhincome and POI files at each wave and appending them to create a panel (wave 10 - wave 18)
 *by: Yasar
 *Date : 24/02/26
 **********************************************
@@ -16,20 +16,7 @@ w14 - 53, 54, 55, 56
 
 *ASSUMPTION: if someone is employed as wage worker in wave X, then their earnings for the corresponding 4 months is marked as zero or non zero, not missing
 *ASSUMPTION: if someone is engaged in self employment (SE) in wave X, then all corresponding months of hhincbus is either non zero or zero; missing is marked as zero
-*total SE income in a month is the per capita hhincbus + earnings from wages since some individuls report wage earnings along with hhincbus
-
-
-****************************************************
-* FOR WAVES 11–18
-****************************************************
-if (c(username) == "YasarArafathPaleri") {
-    global ospath "D:\cse Dropbox\cseteam"
-}
-global inc "D:/OneDrive - Azim Premji Foundation/Documents/APU- April/isle/incomemerge"
-global rawdatahh "${ospath}/data/cleaneddata/cmie/income/hhincome"
-global poi "${ospath}/data/cleaneddata/cmie/poi"
-global rawdata "${ospath}/data/cleaneddata/cmie/income/memincome"
-
+*total Self Employment income in a month is the per capita hhincbus + earnings from wages since some individuls report wage earnings along with hhincbus
 
 forvalues w = 11/18 {
 
@@ -171,7 +158,7 @@ forvalues w = 11/18 {
     * SAVE
     ***********************************************
 
-    save "D:\OneDrive - Azim Premji Foundation\Documents\APU- April\isle\incomemerge\cmiehhincome_w`w'.dta", replace
+    save "$out\cmiehhincome_w`w'.dta", replace
 }
 
 ****************************************************
@@ -215,95 +202,4 @@ replace wave = 7 if time=="q7"
 replace wave = 8 if time=="q8"
 replace wave = 9 if time=="q9"
 
-****************************************************
-* CREATING SAMPLE FOR ANALYSIS
-****************************************************
-
-gen sampleind = 1 if natureofoccupation=="Student" & inlist(employmentstatus, "Unemployed, not willing and not looking for a job", "Not Applicable")
-
-****************************************************
-* CREATING VARIABLES
-****************************************************
-*education
-gen educnum = .
-replace educnum = 1 if education=="1st Std. Pass" | education == "Pre School"
-replace educnum = 2 if education=="2nd Std. Pass"
-replace educnum = 3 if education=="3rd Std. Pass"
-replace educnum = 4 if education=="4th Std. Pass"
-replace educnum = 5 if education=="5th Std. Pass"
-replace educnum = 6 if education=="6th Std. Pass"
-replace educnum = 7 if education=="7th Std. Pass"
-replace educnum = 8 if education=="8th Std. Pass"
-replace educnum = 9 if education=="9th Std. Pass"
-replace educnum = 10 if education== "10th Std. Pass"
-replace educnum = 11 if education=="11th Std. Pass"
-replace educnum = 12 if education=="12th Std. Pass"
-replace educnum = 13 if education=="Diploma / certificate course" | education=="Diploma"
-replace educnum = 14 if education=="Graduate"
-replace educnum = 15 if education=="Post Graduate"
-replace educnum = 16 if education=="Ph.D / M.Phil"
-replace educnum = 0 if education=="No Education" | education=="Not Applicable"
-
-*father's education
-gen educfatherdrop = educnum if relationwithhoh == "HOH" & gender=="M"
-bysort hhid: egen educfather = max(educfatherdrop)
-gen fe = educfather if inlist(relationwithhoh, "Son", "Daughter")
-
-
-*father's employment
-gen emp_pre = .
-replace emp_pre = 1 if employmentarrangement == "Daily Wage worker/ Casual labour"
-replace emp_pre = 2 if employmentarrangement == "Salaried - Temporary"
-replace emp_pre = 3 if employmentarrangement == "Self-employed"
-replace emp_pre = 4 if employmentarrangement == "Salaried - Permanent"
-replace emp_pre = 5 if employmentarrangement == "Not Applicable"
-
-gen empfatherdrop = emp_pre if relationwithhoh == "HOH" & gender=="M"
-bysort hhid: egen empfather = max(empfatherdrop)
-gen emp_father = empfather if inlist(relationwithhoh, "Son", "Daughter")
-
-bysort hhid memid: gen samtime = wave if sampleind==1
-*this marks the time when the individual appears with the required features of the sample.
-bysort hhid memid: egen samtime1 = min(samtime)
-*samtime1 variable identifies the first time the individual appears with the required features of the sample 
-gen dropobs = 1 if wave<samtime1 
-drop if dropobs == 1
-*drop all obs before samtime1, i.e., the first time the individual appears with the required features of the sample 
-
-sort hhid memid wave
-
-gen post_covid = 0
-
-save "D:\OneDrive - Azim Premji Foundation\Documents\APU- April\isle\1\poiinc", replace
-
-
-********************************
-**making the panel balanced
-********************************
-use "D:\OneDrive - Azim Premji Foundation\Documents\APU- April\isle\1\poiinc", clear
-capture drop panelid dup
-
-bysort hhid memid (wave), sort : gen panelid=_n
-duplicates tag hhid memid, gen(dup)
-
-count if panelid==1 & dup==8 & wave==1 
-count if panelid==1 & dup==7 & wave==2 
-count if panelid==1 & dup==6 & wave==3 
-count if panelid==1 & dup==5 & wave==4 
-count if panelid==1 & dup==4 & wave==5 
-count if panelid==1 & dup==3 & wave==6 
-
-
-bysort hhid memid: gen balpan = 1 if wave==1 & dup==8 & panelid==1 
-bysort hhid memid: replace balpan = 1 if wave==2 & dup==7 & panelid==1
-bysort hhid memid: replace balpan = 1 if wave==3 & dup==6 & panelid==1
-bysort hhid memid: replace balpan = 1 if wave==4 & dup==5 & panelid==1
-bysort hhid memid: replace balpan = 1 if wave==5 & dup==4 & panelid==1
-bysort hhid memid: replace balpan = 1 if wave==6 & dup==3 & panelid==1
-
-capture drop balancedsample
-bysort hhid memid: egen balancedsample = min(balpan)
-
-keep if balancedsample == 1
-
-save "D:\OneDrive - Azim Premji Foundation\Documents\APU- April\isle\1\poiinc_bal", replace
+save "$\cphs10_18", replace
